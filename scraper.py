@@ -20,26 +20,42 @@ all_rows = soup.find_all('tr')
 
 print(f"--- Syncing Hampsthwaite FC Data to Supabase ---")
 
+# A simple dictionary to translate FA codes to nice names
+comp_names = {
+    "YMD2": "York League Div 2",
+    "CC": "West Riding County Cup",
+    "YFA": "York League Cup"
+}
+
 for row in all_rows:
-    row_text = row.text.strip()
+    # 1. Grab the Competition Cell (the very first one in the row)
+    comp_cell = row.find('td', class_='bold')
     
-    # Filter for match rows only (ignoring summary rows)
-    if "Hampsthwaite" in row_text and "Overall" not in row_text and "Home" not in row_text:
-        cells = row.find_all('td')
+    # 2. Grab the other cells using the classes we found
+    date_cell = row.find('span', class_='spacer-right')
+    home_cell = row.find('td', class_='home-team')
+    score_cell = row.find('td', class_='score')
+    away_cell = row.find('td', class_='road-team')
+
+    if home_cell and away_cell:
+        # Get the raw code (YMD2, CC, etc.)
+        raw_comp = comp_cell.text.strip() if comp_cell else "Unknown"
         
-        if len(cells) >= 4:
-            # Prepare the data object
-            match_data = {
-                "date": cells[0].text.strip(),
-                "home_team": cells[2].text.strip(),
-                "away_team": cells[4].text.strip()
-            }
-            
-            # 3. Push to Supabase 'matches' table
-            try:
-                data, count = supabase.table("matches").insert(match_data).execute()
-                print(f"Saved: {match_data['home_team']} vs {match_data['away_team']}")
-            except Exception as e:
-                print(f"Error saving row: {e}")
+        # Translate it if it's in our dictionary, otherwise use the raw code
+        friendly_comp = comp_names.get(raw_comp, raw_comp)
+
+        match_data = {
+            "date": date_cell.text.strip() if date_cell else "TBC",
+            "competition": friendly_comp,
+            "home_team": home_cell.text.strip(),
+            "away_team": away_cell.text.strip(),
+            "score": score_cell.text.strip().split('\n')[0].strip() if score_cell else "VS"
+        }
+        
+        try:
+            supabase.table("matches").insert(match_data).execute()
+            print(f"Synced {friendly_comp}: {match_data['home_team']} vs {match_data['away_team']}")
+        except Exception as e:
+            print(f"Error: {e}")
 
 print("Sync Complete!")
