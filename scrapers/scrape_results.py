@@ -23,8 +23,8 @@ saved_count = 0
 while True:
     print(f"\nScanning Page {page}...")
     
-    # Using the {page} variable in the URL to flip through the pages
-    results_url = f"https://fulltime.thefa.com/results/{page}/100.html?selectedSeason=9631242&selectedFixtureGroupAgeGroup=0&previousSelectedFixtureGroupAgeGroup=&selectedFixtureGroupKey=1_419533493"
+    # Added selectedDateCode=all to get the whole season, and Option=3 for Cup games
+    results_url = f"https://fulltime.thefa.com/results/{page}/100.html?selectedSeason=9631242&selectedFixtureGroupAgeGroup=0&previousSelectedFixtureGroupAgeGroup=&selectedFixtureGroupKey=1_419533493&previousSelectedFixtureGroupKey=1_419533493&selectedDateCode=all&selectedRelatedFixtureOption=3&selectedClub=&previousSelectedClub=&selectedTeam="
     
     res = requests.get(results_url, headers=headers)
     soup = BeautifulSoup(res.content, "html.parser")

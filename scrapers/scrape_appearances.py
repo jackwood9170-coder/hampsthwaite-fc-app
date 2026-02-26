@@ -105,27 +105,51 @@ def scrape_match_appearances(f_id, home_name, away_name):
         print(f"      !!! Error on {f_id}: {e}")
         return 0
 
-# --- ISOLATED 1-GAME TEST ---
-print("\n--- Running 1-Game Appearance Test ---")
-test_fixture_id = "29646093" # <-- UPDATE THIS ID
+# --- MAIN ENGINE: AUTOMATED APPEARANCE SYNC ---
+print("\n--- Syncing Player Appearances ---")
 
-# Fetch the real team names from our matches table!
 try:
-    match_info = supabase.table("matches").select("home_team, away_team").eq("fixture_id", test_fixture_id).execute()
+    # 1. Get all matches that are FINISHED
+    matches_res = supabase.table("matches").select("fixture_id, home_team, away_team, score").execute()
     
-    if match_info.data:
-        test_home = match_info.data[0]['home_team']
-        test_away = match_info.data[0]['away_team']
-        print(f"Found match in DB: {test_home} vs {test_away}")
-    else:
-        print("Match not found in DB. Using fallback names.")
-        test_home = "Unknown Home"
-        test_away = "Unknown Away"
+    finished_matches = [
+        m for m in matches_res.data 
+        if m['score'] 
+        and "VS" not in m['score'] 
+        and "P - P" not in m['score']
+        and "P-P" not in m['score']
+        and "Postponed" not in m['score']
+    ]
+    
+    print(f"Found {len(finished_matches)} finished matches. Checking which ones need player stats...")
+    
+    saved_count = 0
+    
+    # 2. Loop through and check each match individually (Bypasses the 1,000 row limit!)
+    for match in finished_matches:
+        f_id = str(match['fixture_id'])
+        h_name = match['home_team']
+        a_name = match['away_team']
         
-except Exception as e:
-    print(f"Error fetching match details: {e}")
-    test_home = "Unknown Home"
-    test_away = "Unknown Away"
+        # Ask Supabase: Do we have ANY players for this specific fixture_id?
+        # .limit(1) makes this query lightning fast
+        check_res = supabase.table("appearances").select("fixture_id").eq("fixture_id", f_id).limit(1).execute()
+        
+        # If the list is empty (0 players found), we need to scrape it!
+        if len(check_res.data) == 0:
+            print(f"Missing stats for: {h_name} vs {a_name}. Scraping...")
+            players_saved = scrape_match_appearances(f_id, h_name, a_name)
+            print(f"  -> Saved {players_saved} players.")
+            saved_count += 1
+            
+            # Polite scraping delay number of seconds between calls
+            import time
+            time.sleep(2)
+            
+    if saved_count == 0:
+        print("All matches already have player stats. Nothing new to scrape!")
+        
+    print("\n--- APPEARANCE SYNC COMPLETE ---")
 
-players_saved = scrape_match_appearances(test_fixture_id, test_home, test_away)
-print(f"Successfully saved {players_saved} player stats for fixture {test_fixture_id}.")
+except Exception as e:
+    print(f"Error in automated sync engine: {e}")
